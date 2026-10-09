@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Antigravity 会话查看器</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar">
+    <div class="side-top">
+      <div class="brand">Antigravity 会话</div>
+      <div class="side-actions">
+        <button id="pickBtn" class="btn">选择目录</button>
+        <button id="reopenBtn" class="btn ghost" hidden>打开上次目录</button>
+        <button id="reloadBtn" class="btn ghost" hidden title="重新读取数据库">刷新</button>
+      </div>
+      <div class="search-row">
+        <input id="search" type="search" placeholder="搜索标题 / 摘要 / UUID">
+        <button id="foldAllBtn" class="btn ghost" hidden title="折叠 / 展开所有工程">全部折叠</button>
+      </div>
+      <div id="status" class="status"></div>
+    </div>
+    <nav id="projects"></nav>
+  </aside>
+  <main id="main">
+    <div id="welcome" class="welcome">
+      <h1>Antigravity 会话查看器</h1>
+      <p>纯本地运行，数据不会离开浏览器。点击下面的按钮，选择 Antigravity 的数据目录：</p>
+      <p><code>C:\Users\&lt;你的用户名&gt;\.gemini\antigravity</code></p>
+      <button id="pickBtn2" class="btn big">选择目录</button>
+      <ul class="hints">
+        <li>工程与会话列表来自 <code>conversation_summaries.db</code>，按 <code>project_id</code> 分组，子代理会话挂在父会话下面。</li>
+        <li>点击会话后，按 UUID 读取 <code>conversations/&lt;UUID&gt;.db</code> 中的 <code>steps</code> 表并解码。</li>
+        <li>会自动合并 <code>.db-wal</code> 中尚未写回的数据；旧版 <code>.pb</code> 文件是加密的，无法读取。</li>
+        <li>推荐使用 Chrome / Edge，可记住目录；其他浏览器会退回到文件夹上传方式。</li>
+      </ul>
+    </div>
+    <div id="conversation"></div>
+  </main>
+</div>
+<input id="dirInput" type="file" webkitdirectory directory multiple hidden>
+<script src="lib/sql-wasm.js"></script>
+<script src="lib/sql-wasm-binary.js"></script>
+<script src="lib/marked.min.js"></script>
+<script src="js/proto.js"></script>
+<script src="js/wal.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

@@ -32,7 +32,7 @@
   };
 
   function loadOpts() {
-    const def = { thinking: true, tools: true, system: false, expand: false };
+    const def = { thinking: true, tools: true, system: false, expand: false, validOnly: false };
     try { return Object.assign(def, JSON.parse(localStorage.getItem('agy-viewer-opts') || '{}')); }
     catch (e) { return def; }
   }
@@ -54,11 +54,11 @@
     return state.SQL;
   }
 
-  async function openDb(relPath) {
-    const file = await state.source.getFile(relPath);
+  async function openDb(relPath, storeHint) {
+    const file = await state.source.getFile(relPath, storeHint);
     if (!file) return null;
     let bytes = new Uint8Array(await file.arrayBuffer());
-    const wal = await state.source.getFile(relPath + '-wal');
+    const wal = await state.source.getFile(relPath + '-wal', storeHint);
     if (wal && wal.size) bytes = applyWal(bytes, new Uint8Array(await wal.arrayBuffer()));
     if (bytes.length > 19 && bytes[18] === 2) { bytes = bytes.slice(); bytes[18] = 1; bytes[19] = 1; }
     const SQL = await getSQL();
@@ -75,42 +75,129 @@
   }
 
   // ---------------------------------------------------------------- sources
-  function fsaSource(rootHandle) {
+  function fsaSource(rootHandle, stores) {
+    const storeMap = new Map(stores.map(s => [s.name, s]));
     return {
-      name: rootHandle.name,
-      async getFile(rel) {
-        try {
-          const parts = rel.split('/');
-          let dir = rootHandle;
-          for (let i = 0; i < parts.length - 1; i++) dir = await dir.getDirectoryHandle(parts[i]);
-          const fh = await dir.getFileHandle(parts[parts.length - 1]);
-          return await fh.getFile();
-        } catch (e) { return null; }
+      name: stores.length > 1 ? `${rootHandle.name} (${stores.map(s => s.name).join(' + ')})` : stores[0].name,
+      stores,
+      async getFile(rel, storeHint) {
+        const searchStores = storeHint && storeMap.has(storeHint)
+          ? [storeMap.get(storeHint), ...stores.filter(s => s.name !== storeHint)]
+          : stores;
+        for (const st of searchStores) {
+          try {
+            const parts = rel.split('/');
+            let dir = st.handle;
+            for (let i = 0; i < parts.length - 1; i++) dir = await dir.getDirectoryHandle(parts[i]);
+            const fh = await dir.getFileHandle(parts[parts.length - 1]);
+            const file = await fh.getFile();
+            if (file) return file;
+          } catch (e) { /* try next store */ }
+        }
+        return null;
       },
       async listConversationFiles() {
-        const out = [];
-        try {
-          const dir = await rootHandle.getDirectoryHandle('conversations');
-          for await (const [name, h] of dir.entries()) if (h.kind === 'file') out.push(name);
-        } catch (e) { /* ignore */ }
-        return out;
+        const map = new Map(); // filename -> storeName
+        for (const st of stores) {
+          try {
+            const dir = await st.handle.getDirectoryHandle('conversations');
+            for await (const [name, h] of dir.entries()) {
+              if (h.kind === 'file' && !map.has(name)) map.set(name, st.name);
+            }
+          } catch (e) { /* ignore */ }
+        }
+        return map;
+      },
+      async readSummaries(openDbFn) {
+        const allRows = [];
+        for (const st of stores) {
+          try {
+            const db = await openDbFn('conversation_summaries.db', st.name);
+            if (!db) continue;
+            const rows = queryAll(db, `SELECT conversation_id, title, preview, step_count, last_modified_time, workspace_uris,
+                status, project_id, agent_name, parent_conversation_id, nesting_depth, killed, last_user_input_time, group_id, app_data_dir
+              FROM conversation_summaries`);
+            db.close();
+            for (const r of rows) {
+              r.storeName = st.name;
+              const isCli = r.project_id === 'default-cli-project' || r.app_data_dir === 'antigravity-cli';
+              r.sourceType = isCli ? 'CLI' : 'IDE';
+              allRows.push(r);
+            }
+          } catch (e) {
+            console.warn('Failed to read summaries from ' + st.name, e);
+          }
+        }
+        return allRows;
       },
     };
   }
 
   function fileListSource(files) {
-    // Find the root that contains conversation_summaries.db
     const all = Array.from(files);
-    const summary = all.find(f => /(^|\/)conversation_summaries\.db$/.test(f.webkitRelativePath));
-    if (!summary) return null;
-    const prefix = summary.webkitRelativePath.slice(0, -'conversation_summaries.db'.length);
-    const map = new Map();
-    for (const f of all) if (f.webkitRelativePath.startsWith(prefix)) map.set(f.webkitRelativePath.slice(prefix.length), f);
+    const summaries = all.filter(f => /(^|\/)conversation_summaries\.db$/.test(f.webkitRelativePath));
+    if (!summaries.length) return null;
+
+    const stores = summaries.map(summaryFile => {
+      const prefix = summaryFile.webkitRelativePath.slice(0, -'conversation_summaries.db'.length);
+      const name = prefix.replace(/\/$/, '').split('/').pop() || 'antigravity';
+      const type = /cli/i.test(name) ? 'CLI' : 'IDE';
+      const map = new Map();
+      for (const f of all) {
+        if (f.webkitRelativePath.startsWith(prefix)) {
+          map.set(f.webkitRelativePath.slice(prefix.length), f);
+        }
+      }
+      return { name, type, prefix, map };
+    });
+
+    const storeMap = new Map(stores.map(s => [s.name, s]));
     return {
-      name: prefix.replace(/\/$/, '').split('/').pop() || 'antigravity',
-      async getFile(rel) { return map.get(rel) || null; },
+      name: stores.length > 1 ? stores.map(s => s.name).join(' + ') : stores[0].name,
+      stores,
+      async getFile(rel, storeHint) {
+        const searchStores = storeHint && storeMap.has(storeHint)
+          ? [storeMap.get(storeHint), ...stores.filter(s => s.name !== storeHint)]
+          : stores;
+        for (const st of searchStores) {
+          const f = st.map.get(rel);
+          if (f) return f;
+        }
+        return null;
+      },
       async listConversationFiles() {
-        return [...map.keys()].filter(k => k.startsWith('conversations/') && k.split('/').length === 2).map(k => k.slice(14));
+        const map = new Map();
+        for (const st of stores) {
+          for (const k of st.map.keys()) {
+            if (k.startsWith('conversations/') && k.split('/').length === 2) {
+              const fname = k.slice(14);
+              if (!map.has(fname)) map.set(fname, st.name);
+            }
+          }
+        }
+        return map;
+      },
+      async readSummaries(openDbFn) {
+        const allRows = [];
+        for (const st of stores) {
+          try {
+            const db = await openDbFn('conversation_summaries.db', st.name);
+            if (!db) continue;
+            const rows = queryAll(db, `SELECT conversation_id, title, preview, step_count, last_modified_time, workspace_uris,
+                status, project_id, agent_name, parent_conversation_id, nesting_depth, killed, last_user_input_time, group_id, app_data_dir
+              FROM conversation_summaries`);
+            db.close();
+            for (const r of rows) {
+              r.storeName = st.name;
+              const isCli = r.project_id === 'default-cli-project' || r.app_data_dir === 'antigravity-cli';
+              r.sourceType = isCli ? 'CLI' : 'IDE';
+              allRows.push(r);
+            }
+          } catch (e) {
+            console.warn('Failed to read summaries from ' + st.name, e);
+          }
+        }
+        return allRows;
       },
     };
   }
@@ -137,14 +224,39 @@
     } catch (e) { return undefined; }
   }
 
-  async function resolveRoot(handle) {
-    // Accept the antigravity folder itself, or its parent (.gemini)
-    try { await handle.getFileHandle('conversation_summaries.db'); return handle; } catch (e) { /* try child */ }
+  async function resolveStores(handle) {
+    // 1. Direct check: handle itself contains conversation_summaries.db
     try {
-      const child = await handle.getDirectoryHandle('antigravity');
-      await child.getFileHandle('conversation_summaries.db');
-      return child;
-    } catch (e) { return null; }
+      await handle.getFileHandle('conversation_summaries.db');
+      const name = handle.name;
+      return [{ name, type: /cli/i.test(name) ? 'CLI' : 'IDE', handle }];
+    } catch (e) { /* try children */ }
+
+    // 2. Look for known subdirectories (antigravity-cli, antigravity)
+    const found = [];
+    const known = ['antigravity-cli', 'antigravity'];
+    for (const name of known) {
+      try {
+        const sub = await handle.getDirectoryHandle(name);
+        await sub.getFileHandle('conversation_summaries.db');
+        found.push({ name, type: /cli/i.test(name) ? 'CLI' : 'IDE', handle: sub });
+      } catch (e) { /* ignore */ }
+    }
+
+    if (!found.length) {
+      try {
+        for await (const [name, entry] of handle.entries()) {
+          if (entry.kind === 'directory' && !known.includes(name)) {
+            try {
+              await entry.getFileHandle('conversation_summaries.db');
+              found.push({ name, type: /cli/i.test(name) ? 'CLI' : 'IDE', handle: entry });
+            } catch (e) { /* ignore */ }
+          }
+        }
+      } catch (e) { /* ignore */ }
+    }
+
+    return found;
   }
 
   async function pickDirectory() {
@@ -152,10 +264,13 @@
     let handle;
     try { handle = await window.showDirectoryPicker({ id: 'agy-root', mode: 'read' }); }
     catch (e) { if (e.name !== 'AbortError') $('#dirInput').click(); return; }
-    const root = await resolveRoot(handle);
-    if (!root) { setStatus('该目录下没有找到 conversation_summaries.db，请选择 C:\\Users\\<用户>\\.gemini\\antigravity', true); return; }
-    await idbSet('root', root);
-    await useSource(fsaSource(root));
+    const stores = await resolveStores(handle);
+    if (!stores.length) {
+      setStatus('该目录下没有找到 conversation_summaries.db，请选择 C:\\Users\\<用户>\\.gemini 或其下的 antigravity / antigravity-cli 目录', true);
+      return;
+    }
+    await idbSet('root', handle);
+    await useSource(fsaSource(handle, stores));
   }
 
   async function reopenLast() {
@@ -165,7 +280,9 @@
       let p = await h.queryPermission({ mode: 'read' });
       if (p !== 'granted') p = await h.requestPermission({ mode: 'read' });
       if (p !== 'granted') { setStatus('未获得读取权限', true); return; }
-      await useSource(fsaSource(h));
+      const stores = await resolveStores(h);
+      if (!stores.length) { setStatus('未在上次的目录中找到会话数据库', true); return; }
+      await useSource(fsaSource(h, stores));
     } catch (e) { setStatus('无法打开上次的目录：' + e.message, true); }
   }
 
@@ -183,45 +300,85 @@
     return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
   }
   function uriToPath(u) {
+    if (!u) return '';
     let s = u;
     try { s = decodeURIComponent(u); } catch (e) { /* keep */ }
-    s = s.replace(/^file:\/\/\//, '').replace(/\\/g, '/');
-    if (/^[a-z]:/.test(s)) s = s[0].toUpperCase() + s.slice(1);
-    return s;
+    s = s.replace(/^file:\/\/\//i, '').replace(/\\/g, '/');
+    if (/^[a-z]:/i.test(s)) s = s[0].toUpperCase() + s.slice(1);
+    return s.replace(/\/+$/, '');
   }
   function parseWorkspaces(json) {
-    try { return (JSON.parse(json) || []).map(uriToPath); } catch (e) { return []; }
+    try { return (JSON.parse(json) || []).map(uriToPath).filter(Boolean); } catch (e) { return []; }
   }
 
   async function useSource(src) {
     state.source = src;
-    setStatus('正在读取 conversation_summaries.db …');
-    let db;
-    try { db = await openDb('conversation_summaries.db'); }
-    catch (e) { setStatus('读取失败：' + e.message, true); return; }
-    if (!db) { setStatus('没有找到 conversation_summaries.db', true); return; }
-    const rows = queryAll(db, `SELECT conversation_id, title, preview, step_count, last_modified_time, workspace_uris,
-        status, project_id, agent_name, parent_conversation_id, nesting_depth, killed, last_user_input_time, group_id
-      FROM conversation_summaries`);
-    db.close();
+    setStatus('正在读取数据库 …');
+    let rows;
+    try {
+      rows = await src.readSummaries(openDb);
+    } catch (e) {
+      setStatus('读取失败：' + e.message, true);
+      return;
+    }
+    if (!rows || !rows.length) {
+      setStatus('没有找到会话数据', true);
+      return;
+    }
 
-    const files = new Set(await src.listConversationFiles());
-    state.convs = rows.map(r => ({
-      id: r.conversation_id,
-      title: r.title || '',
-      preview: r.preview || '',
-      steps: r.step_count,
-      modified: parseTime(r.last_modified_time),
-      lastInput: parseTime(r.last_user_input_time),
-      workspaces: parseWorkspaces(r.workspace_uris),
-      status: (r.status || '').replace('CASCADE_RUN_STATUS_', ''),
-      projectId: r.project_id || '',
-      agent: r.agent_name || '',
-      parent: r.parent_conversation_id || '',
-      depth: r.nesting_depth || 0,
-      file: files.has(r.conversation_id + '.db') ? 'db' : files.has(r.conversation_id + '.pb') ? 'pb' : '',
-      children: [],
-    }));
+    // filename -> storeName
+    const convFileMap = await src.listConversationFiles();
+
+    // Deduplicate rows by conversation_id across stores.
+    // If a conversation_id exists in multiple stores, prefer the store that actually has
+    // its conversation database on disk (.db or .pb), then the more recently modified one.
+    const deduped = new Map();
+    for (const r of rows) {
+      const id = r.conversation_id;
+      const fileExt = convFileMap.has(id + '.db') ? 'db' : convFileMap.has(id + '.pb') ? 'pb' : '';
+      const hasActualFile = !!fileExt && convFileMap.get(id + '.' + fileExt) === r.storeName;
+      const modTime = parseTime(r.last_modified_time);
+
+      if (!deduped.has(id)) {
+        deduped.set(id, { row: r, hasActualFile, modTime });
+      } else {
+        const prev = deduped.get(id);
+        if (!prev.hasActualFile && hasActualFile) {
+          deduped.set(id, { row: r, hasActualFile, modTime });
+        } else if (prev.hasActualFile === hasActualFile) {
+          if ((modTime || 0) > (prev.modTime || 0)) {
+            deduped.set(id, { row: r, hasActualFile, modTime });
+          }
+        }
+      }
+    }
+
+    state.convs = [...deduped.values()].map(({ row: r }) => {
+      const id = r.conversation_id;
+      const dbStore = convFileMap.get(id + '.db');
+      const pbStore = convFileMap.get(id + '.pb');
+      const file = dbStore ? 'db' : pbStore ? 'pb' : '';
+      const fileStore = dbStore || pbStore || r.storeName;
+      return {
+        id,
+        title: r.title || '',
+        preview: r.preview || '',
+        steps: r.step_count,
+        modified: parseTime(r.last_modified_time),
+        lastInput: parseTime(r.last_user_input_time),
+        workspaces: parseWorkspaces(r.workspace_uris),
+        status: (r.status || '').replace('CASCADE_RUN_STATUS_', ''),
+        projectId: r.project_id || '',
+        agent: r.agent_name || '',
+        parent: r.parent_conversation_id || '',
+        depth: r.nesting_depth || 0,
+        sourceType: r.sourceType || ((r.project_id === 'default-cli-project' || r.app_data_dir === 'antigravity-cli') ? 'CLI' : 'IDE'),
+        storeName: fileStore,
+        file,
+        children: [],
+      };
+    });
+
     state.byId = new Map(state.convs.map(c => [c.id, c]));
     for (const c of state.convs) {
       const p = c.parent && state.byId.get(c.parent);
@@ -237,24 +394,92 @@
     else if (state.currentId && state.byId.has(state.currentId)) openConversation(state.currentId);
   }
 
+  function getEffectiveWorkspaces(c) {
+    if (c.workspaces && c.workspaces.length) return c.workspaces;
+    let curr = c;
+    const visited = new Set([c.id]);
+    while (curr.parent && state.byId.has(curr.parent)) {
+      curr = state.byId.get(curr.parent);
+      if (visited.has(curr.id)) break;
+      visited.add(curr.id);
+      if (curr.workspaces && curr.workspaces.length) return curr.workspaces;
+    }
+    return [];
+  }
+
+  function getProjectKey(c) {
+    const ws = getEffectiveWorkspaces(c);
+    if (ws.length) {
+      return 'ws:' + [...new Set(ws.map(w => w.toLowerCase()))].sort().join('|');
+    }
+    if (c.projectId && c.projectId !== 'default-cli-project') {
+      return 'proj:' + c.projectId;
+    }
+    return 'ws:none';
+  }
+
+  function disambiguateProjectNames(projects) {
+    const byBase = new Map();
+    for (const p of projects) {
+      const base = p.workspaces.length
+        ? [...new Set(p.workspaces.map(w => w.replace(/\/+$/, '').split('/').pop()))].join(' + ')
+        : '(无工作区)';
+      p.baseName = base;
+      if (!byBase.has(base)) byBase.set(base, []);
+      byBase.get(base).push(p);
+    }
+
+    for (const [base, list] of byBase.entries()) {
+      if (list.length === 1 || base === '(无工作区)') {
+        list[0].name = base;
+        continue;
+      }
+      for (const p of list) {
+        let depth = 2;
+        let chosen = '';
+        const allPaths = p.workspaces;
+        while (depth <= 6) {
+          const labels = allPaths.map(w => {
+            const parts = w.replace(/\/+$/, '').split('/');
+            return parts.slice(Math.max(0, parts.length - depth), parts.length - 1).join('/');
+          }).filter(Boolean);
+          const candidate = labels.length ? ` (${[...new Set(labels)].join(', ')})` : '';
+          const matchesColliding = list.filter(other => other !== p && other.workspaces.some(ow => {
+            const oparts = ow.replace(/\/+$/, '').split('/');
+            const osub = oparts.slice(Math.max(0, oparts.length - depth), oparts.length - 1).join('/');
+            return labels.includes(osub);
+          }));
+          if (!matchesColliding.length) {
+            chosen = candidate;
+            break;
+          }
+          depth++;
+        }
+        p.name = `${base}${chosen || ` (${p.workspaces.join(', ')})`}`;
+      }
+    }
+  }
+
   function buildProjects() {
     const map = new Map();
     for (const c of state.convs) {
-      const key = c.projectId || 'ws:' + c.workspaces.join('|');
-      if (!map.has(key)) map.set(key, { key, id: c.projectId, convs: [], workspaces: new Set() });
+      const key = getProjectKey(c);
+      const ws = getEffectiveWorkspaces(c);
+      if (!map.has(key)) {
+        map.set(key, { key, id: c.projectId, convs: [], workspaces: new Set() });
+      }
       const p = map.get(key);
       p.convs.push(c);
-      c.workspaces.forEach(w => p.workspaces.add(w));
+      ws.forEach(w => p.workspaces.add(w));
     }
-    for (const p of map.values()) {
+    const projectList = [...map.values()];
+    for (const p of projectList) {
       p.workspaces = [...p.workspaces];
-      p.name = p.workspaces.length
-        ? [...new Set(p.workspaces.map(w => w.replace(/\/$/, '').split('/').pop()))].join(' + ')
-        : '(无工作区)';
-      p.modified = Math.max(...p.convs.map(c => +(c.modified || 0)));
+      p.modified = Math.max(0, ...p.convs.map(c => +(c.modified || 0)));
       p.convs.sort((a, b) => (b.modified || 0) - (a.modified || 0));
     }
-    state.projects = [...map.values()].sort((a, b) => b.modified - a.modified);
+    disambiguateProjectNames(projectList);
+    state.projects = projectList.sort((a, b) => b.modified - a.modified);
   }
 
   const collapsed = new Set(JSON.parse(localStorageGet('agy-viewer-collapsed') || '[]'));
@@ -267,7 +492,7 @@
 
   function matches(c, q) {
     if (!q) return true;
-    return (c.title + '\n' + c.preview + '\n' + c.id + '\n' + c.agent).toLowerCase().includes(q);
+    return (c.title + '\n' + c.preview + '\n' + c.id + '\n' + (c.agent || '') + '\n' + (c.sourceType || '') + '\n' + c.workspaces.join('\n')).toLowerCase().includes(q);
   }
 
   function renderSidebar() {
@@ -276,34 +501,60 @@
     const q = state.filter.trim().toLowerCase();
     let shown = 0;
     for (const p of state.projects) {
-      // top-level conversations of this project (or orphans whose parent lives elsewhere)
-      const tops = p.convs.filter(c => !c.parent || !state.byId.has(c.parent));
-      const visible = c => matches(c, q) || c.children.some(visible);
+      // Top-level conversations of this project (parent is not in this project, or has no parent)
+      const tops = p.convs.filter(c => !c.parent || !p.convs.some(k => k.id === c.parent));
+      const visible = c => {
+        if (state.opts.validOnly && !c.file && !c.children.some(visible)) return false;
+        return matches(c, q) || c.children.some(visible);
+      };
       const list = tops.filter(visible);
-      if (!list.length && !(q && (p.name.toLowerCase().includes(q)))) continue;
+      const projMatch = q && (p.name.toLowerCase().includes(q) || p.workspaces.some(w => w.toLowerCase().includes(q)));
+      if (!list.length && (!projMatch || (state.opts.validOnly && !p.convs.some(c => c.file)))) continue;
       const items = list.length ? list : tops;
       const isCollapsed = collapsed.has(p.key) && !q;
-      const head = el('div', { class: 'proj-head', title: p.workspaces.join('\n') + (p.id ? `\n工程 ID: ${p.id}` : ''),
-        onclick: () => { collapsed.has(p.key) ? collapsed.delete(p.key) : collapsed.add(p.key); saveCollapsed(); renderSidebar(); } },
+      const count = state.opts.validOnly ? p.convs.filter(c => c.file).length : p.convs.length;
+      const head = el('div', {
+        class: 'proj-head',
+        title: (p.workspaces.length ? p.workspaces.join('\n') : '(无工作区)') + (p.id ? `\n工程 ID: ${p.id}` : ''),
+        onclick: () => { collapsed.has(p.key) ? collapsed.delete(p.key) : collapsed.add(p.key); saveCollapsed(); renderSidebar(); }
+      },
         el('span', { class: 'chev' + (isCollapsed ? '' : ' open') }, '▸'),
         el('span', { class: 'proj-name' }, p.name),
-        el('span', { class: 'count' }, String(p.convs.length)));
+        el('span', { class: 'count' }, String(count)));
       const ul = el('div', { class: 'conv-list' });
       if (!isCollapsed) for (const c of items) ul.append(convItem(c, q, 0));
       box.append(el('div', { class: 'project' }, head, ul));
       shown += items.length;
     }
-    if (!shown) box.append(el('div', { class: 'empty' }, q ? '没有匹配的会话' : '没有会话'));
-    updateFoldAllBtn();
+    if (!shown) box.append(el('div', { class: 'empty' }, q ? '没有匹配的会话' : (state.opts.validOnly ? '没有有效数据文件的会话' : '没有会话')));
+    updateControls();
   }
 
   function allCollapsed() {
     return state.projects.length > 0 && state.projects.every(p => collapsed.has(p.key));
   }
+  function updateControls() {
+    updateFoldAllBtn();
+    updateValidOnlyBtn();
+  }
   function updateFoldAllBtn() {
     const btn = $('#foldAllBtn');
+    if (!btn) return;
     btn.hidden = !state.projects.length;
     btn.textContent = allCollapsed() ? '全部展开' : '全部折叠';
+  }
+  function updateValidOnlyBtn() {
+    const btn = $('#validOnlyBtn');
+    if (!btn) return;
+    btn.hidden = !state.projects.length;
+    btn.classList.toggle('active', !!state.opts.validOnly);
+    btn.textContent = state.opts.validOnly ? '显示全部' : '仅看有效';
+  }
+  function toggleValidOnly() {
+    state.opts.validOnly = !state.opts.validOnly;
+    saveOpts();
+    updateValidOnlyBtn();
+    renderSidebar();
   }
   function toggleAllProjects() {
     if (allCollapsed()) collapsed.clear();
@@ -318,10 +569,11 @@
     const item = el('a', {
       class: 'conv' + (c.id === state.currentId ? ' active' : '') + (c.file === 'db' ? '' : ' nofile'),
       href: '#' + c.id, style: `padding-left:${12 + level * 16}px`,
-      title: `${convLabel(c)}\n${c.id}\n${fmtTime(c.modified)} · ${c.steps} 步${c.file === 'pb' ? '\n(.pb 加密格式，无法读取)' : ''}`,
+      title: `${convLabel(c)}\n${c.id}\n${c.sourceType ? `[${c.sourceType}] ` : ''}${fmtTime(c.modified)} · ${c.steps} 步${c.file === 'pb' ? '\n(.pb 加密格式，无法读取)' : ''}`,
       onclick: e => { e.preventDefault(); openConversation(c.id); },
     },
       el('div', { class: 'conv-title' },
+        c.sourceType ? el('span', { class: 'tag ' + c.sourceType.toLowerCase() }, c.sourceType) : null,
         c.agent ? el('span', { class: 'tag' }, c.agent) : null,
         convLabel(c)),
       el('div', { class: 'conv-meta' },
@@ -382,7 +634,8 @@
     main.append(loading);
     let steps;
     try {
-      const db = await openDb(`conversations/${id}.db`);
+      const db = await openDb(`conversations/${id}.db`, c.storeName);
+      if (!db) throw new Error(`未找到文件 conversations/${id}.db`);
       const rows = queryAll(db, 'SELECT idx, step_type, status, step_payload FROM steps ORDER BY idx');
       db.close();
       steps = rows.map(parseStep);
@@ -403,9 +656,11 @@
       el('h1', null, convLabel(c)),
       el('div', { class: 'meta-grid' },
         el('span', null, 'UUID'), el('code', { class: 'copy', title: '点击复制', onclick: e => copyText(c.id, e.target) }, c.id),
-        el('span', null, '文件'), el('code', null, c.file ? `conversations/${c.id}.${c.file}` : '—'),
+        el('span', null, '文件'), el('code', null, c.file ? `${c.storeName ? c.storeName + '/' : ''}conversations/${c.id}.${c.file}` : '—'),
         el('span', null, '工作区'), el('span', null, c.workspaces.join('，') || '—'),
         el('span', null, '更新时间'), el('span', null, `${fmtTime(c.modified)}  ·  ${c.steps} 步  ·  ${c.status || '—'}`),
+        c.sourceType ? el('span', null, '来源') : null,
+        c.sourceType ? el('span', null, c.sourceType === 'CLI' ? 'AGY CLI' : 'Antigravity IDE') : null,
         c.agent ? el('span', null, '代理') : null, c.agent ? el('span', null, c.agent) : null,
         parent ? el('span', null, '父会话') : null,
         parent ? el('a', { href: '#' + parent.id, onclick: e => { e.preventDefault(); openConversation(parent.id); } }, convLabel(parent)) : null,
@@ -617,10 +872,12 @@
   }
 
   function brainPath(uri) {
-    // file:///C:/Users/x/.gemini/antigravity/brain/... -> brain/...
+    // file:///C:/Users/x/.gemini/antigravity[-cli]/brain/... -> brain/...
     const p = uriToPath(uri);
-    const i = p.toLowerCase().indexOf('/antigravity/');
-    return i >= 0 ? p.slice(i + 13) : null;
+    const m = p.match(/\/(?:antigravity(?:-cli)?)\/(brain\/.+)$/i);
+    if (m) return m[1];
+    const i = p.toLowerCase().indexOf('/brain/');
+    return i >= 0 ? p.slice(i + 1) : null;
   }
 
   function renderImage(s) {
@@ -629,7 +886,8 @@
     const uri = b ? b.str(6, 5) : '';
     const holder = el('div', { class: 'image' }, el('div', { class: 'muted' }, uriToPath(uri)));
     const rel = uri && brainPath(uri);
-    if (rel) state.source.getFile(rel).then(f => {
+    const storeHint = state.byId.get(state.currentId)?.storeName;
+    if (rel) state.source.getFile(rel, storeHint).then(f => {
       if (!f) return;
       const url = URL.createObjectURL(f);
       state.objectUrls.push(url);
@@ -670,6 +928,7 @@
     if (!src) { setStatus('所选目录中没有 conversation_summaries.db', true); return; }
     useSource(src);
   });
+  $('#validOnlyBtn').addEventListener('click', toggleValidOnly);
   $('#foldAllBtn').addEventListener('click', toggleAllProjects);
   $('#search').addEventListener('input', e => { state.filter = e.target.value; renderSidebar(); });
   window.addEventListener('hashchange', () => {

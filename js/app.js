@@ -919,7 +919,59 @@
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
 
+  // ---------------------------------------------------------------- resizer
+  function initResizer() {
+    const sidebar = $('#sidebar');
+    const resizer = $('#resizer');
+    if (!resizer || !sidebar) return;
+
+    try {
+      const savedWidth = localStorage.getItem('agy-viewer-sidebar-width');
+      if (savedWidth) {
+        const w = parseInt(savedWidth, 10);
+        if (w >= 180 && w <= 800) sidebar.style.width = w + 'px';
+      }
+    } catch (e) {}
+
+    let isDragging = false;
+    let startX = 0;
+    let startW = 0;
+
+    resizer.addEventListener('mousedown', e => {
+      isDragging = true;
+      startX = e.clientX;
+      startW = sidebar.getBoundingClientRect().width;
+      resizer.classList.add('dragging');
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    });
+
+    window.addEventListener('mousemove', e => {
+      if (!isDragging) return;
+      const dx = e.clientX - startX;
+      const newW = Math.max(180, Math.min(800, startW + dx));
+      sidebar.style.width = newW + 'px';
+    });
+
+    window.addEventListener('mouseup', () => {
+      if (!isDragging) return;
+      isDragging = false;
+      resizer.classList.remove('dragging');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      try {
+        localStorage.setItem('agy-viewer-sidebar-width', String(parseInt(sidebar.style.width, 10)));
+      } catch (e) {}
+    });
+
+    resizer.addEventListener('dblclick', () => {
+      sidebar.style.width = '320px';
+      try { localStorage.setItem('agy-viewer-sidebar-width', '320'); } catch (e) {}
+    });
+  }
+
   // ---------------------------------------------------------------- init
+  initResizer();
   $('#pickBtn').addEventListener('click', pickDirectory);
   $('#pickBtn2').addEventListener('click', pickDirectory);
   $('#reloadBtn').addEventListener('click', () => state.source && useSource(state.source));

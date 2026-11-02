@@ -10,7 +10,10 @@
 <div id="app">
   <aside id="sidebar">
     <div class="side-top">
-      <div class="brand">Antigravity 会话</div>
+      <div class="brand-row">
+        <div id="brand" class="brand">Antigravity 会话</div>
+        <button id="langBtn" class="btn ghost small" title="切换语言 / Switch Language">EN</button>
+      </div>
       <div class="side-actions">
         <button id="pickBtn" class="btn">选择目录</button>
         <button id="reopenBtn" class="btn ghost" hidden>打开上次目录</button>
@@ -27,11 +30,11 @@
   <div id="resizer" class="resizer" title="左右拖动调整侧边栏宽度，双击恢复默认宽度"></div>
   <main id="main">
     <div id="welcome" class="welcome">
-      <h1>Antigravity 会话查看器</h1>
-      <p>纯本地运行，数据不会离开浏览器。点击下面的按钮，选择 Antigravity / AGY CLI 的数据目录：</p>
-      <p><code>C:\Users\&lt;你的用户名&gt;\.gemini</code>（选 <code>.gemini</code> 可自动聚合 IDE 与 CLI；也可单选其下的 <code>antigravity</code> 或 <code>antigravity-cli</code>）</p>
+      <h1 id="welcomeTitle">Antigravity 会话查看器</h1>
+      <p id="welcomeP1">纯本地运行，数据不会离开浏览器。点击下面的按钮，选择 Antigravity / AGY CLI 的数据目录：</p>
+      <p id="welcomePath"><code>C:\Users\&lt;你的用户名&gt;\.gemini</code>（选 <code>.gemini</code> 可自动聚合 IDE 与 CLI；也可单选其下的 <code>antigravity</code> 或 <code>antigravity-cli</code>）</p>
       <button id="pickBtn2" class="btn big">选择目录</button>
-      <ul class="hints">
+      <ul id="welcomeHints" class="hints">
         <li>按工程工作区目录独立归类（不论是 Antigravity IDE 还是 AGY CLI，每个工程独立成一个目录）；点击会话后可查看完整记录及关联子代理。</li>
         <li>点击会话后，按 UUID 读取 <code>conversations/&lt;UUID&gt;.db</code> 中的 <code>steps</code> 表并解码。</li>
         <li>会自动合并 <code>.db-wal</code> 中尚未写回的数据；旧版 <code>.pb</code> 文件是加密的，无法读取。</li>

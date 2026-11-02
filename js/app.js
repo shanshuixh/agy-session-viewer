@@ -2,8 +2,221 @@
   'use strict';
   const { Msg, toTree, collectStrings } = window.Proto;
 
+  // ---------------------------------------------------------------- i18n
+  const I18N = {
+    zh: {
+      appTitle: 'Antigravity 会话查看器',
+      brand: 'Antigravity 会话',
+      chooseDir: '选择目录',
+      openLastDir: '打开上次目录',
+      reload: '刷新',
+      reloadTitle: '重新读取数据库',
+      searchPlaceholder: '搜索标题 / 摘要 / UUID',
+      collapseAll: '全部折叠',
+      expandAll: '全部展开',
+      foldAllBtnTitle: '折叠 / 展开所有工程',
+      resizerTitle: '左右拖动调整侧边栏宽度，双击恢复默认宽度',
+      langBtnTitle: '切换为英文 / Switch to English',
+      langBtnText: 'EN',
+      welcomeTitle: 'Antigravity 会话查看器',
+      welcomeP1: '纯本地运行，数据不会离开浏览器。点击下面的按钮，选择 Antigravity / AGY CLI 的数据目录：',
+      welcomePathTip: '<code>C:\\Users\\&lt;你的用户名&gt;\\.gemini</code>（选 <code>.gemini</code> 可自动聚合 IDE 与 CLI；也可单选其下的 <code>antigravity</code> 或 <code>antigravity-cli</code>）',
+      hint1: '按工程工作区目录独立归类（不论是 Antigravity IDE 还是 AGY CLI，每个工程独立成一个目录）；点击会话后可查看完整记录及关联子代理。',
+      hint2: '点击会话后，按 UUID 读取 <code>conversations/&lt;UUID&gt;.db</code> 中的 <code>steps</code> 表并解码。',
+      hint3: '会自动合并 <code>.db-wal</code> 中尚未写回的数据；旧版 <code>.pb</code> 文件是加密的，无法读取。',
+      hint4: '推荐使用 Chrome / Edge，可记住目录；其他浏览器会退回到文件夹上传方式。',
+      // Status
+      readingDb: '正在读取数据库 …',
+      readFailed: msg => '读取失败：' + msg,
+      noConvData: '没有找到会话数据',
+      noConvDbInDir: '该目录下没有找到 conversation_summaries.db，请选择 C:\\Users\\<用户>\\.gemini 或其下的 antigravity / antigravity-cli 目录',
+      noRecordedLastDir: '没有记录上次的目录',
+      noReadPermission: '未获得读取权限',
+      noDbInLastDir: '未在上次的目录中找到会话数据库',
+      openLastDirFailed: msg => '无法打开上次的目录：' + msg,
+      noSummariesInFiles: '所选目录中没有 conversation_summaries.db',
+      statusCounts: (srcName, projCount, convCount) => `${srcName}：${projCount} 个工程，${convCount} 个会话`,
+      sqlInitFailed: msg => 'sql.js 初始化失败：' + msg,
+      // Projects & convs
+      noWorkspace: '(无工作区)',
+      projIdTitle: id => `\n工程 ID: ${id}`,
+      untitled: '(无标题)',
+      noMatchingConvs: '没有匹配的会话',
+      noValidConvs: '没有有效数据文件的会话',
+      stepsCount: n => `${n} 步`,
+      subagentsCount: n => ` · ${n} 子代理`,
+      encryptedTag: ' · 加密',
+      encryptedTooltip: '(.pb 加密格式，无法读取)',
+      encryptedNoticePb: '这个会话是旧版 .pb 格式（内容已加密），无法在浏览器里解码。',
+      fileNotFoundNotice: id => `conversations 目录里找不到 ${id}.db`,
+      loading: '加载中…',
+      fileNotFound: id => `未找到文件 conversations/${id}.db`,
+      // Metadata
+      uuid: 'UUID',
+      file: '文件',
+      workspace: '工作区',
+      updated: '更新时间',
+      source: '来源',
+      agent: '代理',
+      parentConv: '父会话',
+      subagents: '子代理',
+      summary: '摘要',
+      clickToCopy: '点击复制',
+      copied: '已复制',
+      // Toggles
+      thinking: '思考过程',
+      tools: '工具调用',
+      systemSteps: '系统步骤',
+      expandOutput: '展开工具输出',
+      exportMd: '导出 Markdown',
+      // Steps
+      noSteps: '没有可显示的步骤',
+      rawProto: '原始数据',
+      stepParseError: idx => `步骤 ${idx} 解析出错`,
+      details: '详情',
+      content: '内容',
+      noOutput: '(无输出)',
+      callTool: '调用 ',
+      taskDesc: '任务描述',
+      prompt: '提示词',
+      openConvLink: '打开会话 →',
+      user: '用户',
+      assistant: '助手',
+      error: '错误',
+      systemMsg: '系统消息',
+      invokeSubagent: '调用子代理',
+      generateImage: '生成图片',
+      tool: '工具',
+      stepType: type => `类型 ${type}`,
+      stepNames: {
+        5: '写入文件', 7: '搜索', 8: '查看文件', 9: '列目录', 14: '用户', 15: '助手', 17: '错误',
+        21: '运行命令', 23: '检查点', 90: '系统提示', 91: '生成图片', 98: '会话开始', 101: '系统消息',
+        127: '调用子代理', 132: '工具', 138: '提问',
+      },
+      exportWorkspace: '工作区',
+      exportUpdated: '更新时间',
+      exportThinking: '思考过程',
+      exportTool: '工具',
+    },
+    en: {
+      appTitle: 'Antigravity Session Viewer',
+      brand: 'Antigravity Sessions',
+      chooseDir: 'Choose Folder',
+      openLastDir: 'Open Last Folder',
+      reload: 'Reload',
+      reloadTitle: 'Reload database',
+      searchPlaceholder: 'Search title / preview / UUID',
+      collapseAll: 'Collapse All',
+      expandAll: 'Expand All',
+      foldAllBtnTitle: 'Collapse / expand all projects',
+      resizerTitle: 'Drag to resize sidebar, double-click to reset',
+      langBtnTitle: '切换为中文 / Switch to Chinese',
+      langBtnText: '中文',
+      welcomeTitle: 'Antigravity Session Viewer',
+      welcomeP1: 'Runs entirely locally — your data never leaves the browser. Click below to select the Antigravity / AGY CLI data directory:',
+      welcomePathTip: '<code>C:\\Users\\&lt;username&gt;\\.gemini</code> (select <code>.gemini</code> to aggregate IDE &amp; CLI; or select <code>antigravity</code> / <code>antigravity-cli</code> directly)',
+      hint1: 'Cleanly grouped by project workspace directory (for both Antigravity IDE and AGY CLI); click a conversation to view full transcripts and linked subagents.',
+      hint2: 'Clicking a conversation decodes the <code>steps</code> table from <code>conversations/&lt;UUID&gt;.db</code>.',
+      hint3: 'Automatically merges unflushed WAL data from <code>.db-wal</code>; legacy encrypted <code>.pb</code> files cannot be read.',
+      hint4: 'Chrome / Edge recommended to remember directory; other browsers fall back to folder upload.',
+      // Status
+      readingDb: 'Reading database …',
+      readFailed: msg => 'Failed to read: ' + msg,
+      noConvData: 'No conversation data found',
+      noConvDbInDir: 'No conversation_summaries.db found in this directory. Please choose C:\\Users\\<username>\\.gemini or its antigravity / antigravity-cli subdirectory',
+      noRecordedLastDir: 'No previous directory recorded',
+      noReadPermission: 'Read permission not granted',
+      noDbInLastDir: 'No conversation database found in previous directory',
+      openLastDirFailed: msg => 'Failed to open previous directory: ' + msg,
+      noSummariesInFiles: 'No conversation_summaries.db found in selected files',
+      statusCounts: (srcName, projCount, convCount) => `${srcName}: ${projCount} project${projCount === 1 ? '' : 's'}, ${convCount} conversation${convCount === 1 ? '' : 's'}`,
+      sqlInitFailed: msg => 'sql.js initialization failed: ' + msg,
+      // Projects & convs
+      noWorkspace: '(No workspace)',
+      projIdTitle: id => `\nProject ID: ${id}`,
+      untitled: '(Untitled)',
+      noMatchingConvs: 'No matching conversations',
+      noValidConvs: 'No conversations with valid data files',
+      stepsCount: n => `${n} step${n === 1 ? '' : 's'}`,
+      subagentsCount: n => ` · ${n} subagent${n === 1 ? '' : 's'}`,
+      encryptedTag: ' · Encrypted',
+      encryptedTooltip: '(.pb encrypted format, unreadable)',
+      encryptedNoticePb: 'This conversation is in legacy .pb format (encrypted) and cannot be decoded in browser.',
+      fileNotFoundNotice: id => `Cannot find ${id}.db in conversations directory`,
+      loading: 'Loading…',
+      fileNotFound: id => `File conversations/${id}.db not found`,
+      // Metadata
+      uuid: 'UUID',
+      file: 'File',
+      workspace: 'Workspace',
+      updated: 'Updated',
+      source: 'Source',
+      agent: 'Agent',
+      parentConv: 'Parent conversation',
+      subagents: 'Subagents',
+      summary: 'Summary',
+      clickToCopy: 'Click to copy',
+      copied: 'Copied',
+      // Toggles
+      thinking: 'Thinking',
+      tools: 'Tool calls',
+      systemSteps: 'System steps',
+      expandOutput: 'Expand tool output',
+      exportMd: 'Export Markdown',
+      // Steps
+      noSteps: 'No steps to display',
+      rawProto: 'Raw data',
+      stepParseError: idx => `Step ${idx} parse error`,
+      details: 'Details',
+      content: 'Content',
+      noOutput: '(No output)',
+      callTool: 'Call ',
+      taskDesc: 'Task description',
+      prompt: 'Prompt',
+      openConvLink: 'Open conversation →',
+      user: 'User',
+      assistant: 'Assistant',
+      error: 'Error',
+      systemMsg: 'System message',
+      invokeSubagent: 'Invoke Subagent',
+      generateImage: 'Generate Image',
+      tool: 'Tool',
+      stepType: type => `Type ${type}`,
+      stepNames: {
+        5: 'Write File', 7: 'Search', 8: 'Read File', 9: 'List Directory', 14: 'User', 15: 'Assistant', 17: 'Error',
+        21: 'Run Command', 23: 'Checkpoint', 90: 'System Prompt', 91: 'Generate Image', 98: 'Session Start', 101: 'System Message',
+        127: 'Invoke Subagent', 132: 'Tool', 138: 'Ask Question',
+      },
+      exportWorkspace: 'Workspace',
+      exportUpdated: 'Updated',
+      exportThinking: 'Thinking',
+      exportTool: 'Tool',
+    }
+  };
+
+  function detectInitialLang() {
+    try {
+      const saved = localStorage.getItem('agy-viewer-lang');
+      if (saved === 'zh' || saved === 'en') return saved;
+    } catch (e) {}
+    const sys = (navigator.languages && navigator.languages[0]) || navigator.language || navigator.userLanguage || '';
+    return /^zh\b/i.test(sys) ? 'zh' : 'en';
+  }
+
+  function t(key, ...args) {
+    const dict = I18N[state.lang] || I18N.en;
+    const val = dict[key] !== undefined ? dict[key] : (I18N.en[key] !== undefined ? I18N.en[key] : key);
+    return typeof val === 'function' ? val(...args) : val;
+  }
+
+  function getStepName(type) {
+    const dict = I18N[state.lang] || I18N.en;
+    return (dict.stepNames && dict.stepNames[type]) || dict.stepType(type);
+  }
+
   // ---------------------------------------------------------------- state
   const state = {
+    lang: detectInitialLang(),
     SQL: null,
     source: null,        // { name, getFile(relPath) -> Promise<File|null> }
     convs: [],           // rows from conversation_summaries
@@ -46,11 +259,67 @@
     s.classList.toggle('error', !!isError);
   }
 
+  function updateStatusCounts() {
+    if (!state.source || !state.projects.length) return;
+    const activeProjects = state.projects.filter(p => p.convs.some(c => !c.parent && hasValidFile(c)));
+    const topCount = state.convs.filter(c => !c.parent && hasValidFile(c)).length;
+    setStatus(t('statusCounts', state.source.name, activeProjects.length, topCount));
+  }
+
+  function applyI18n() {
+    document.title = t('appTitle');
+    $('#brand').textContent = t('brand');
+    $('#pickBtn').textContent = t('chooseDir');
+    $('#reopenBtn').textContent = t('openLastDir');
+    $('#reloadBtn').textContent = t('reload');
+    $('#reloadBtn').title = t('reloadTitle');
+    $('#search').placeholder = t('searchPlaceholder');
+    $('#resizer').title = t('resizerTitle');
+    $('#langBtn').textContent = t('langBtnText');
+    $('#langBtn').title = t('langBtnTitle');
+
+    const wTitle = $('#welcomeTitle');
+    if (wTitle) wTitle.textContent = t('welcomeTitle');
+    const wP1 = $('#welcomeP1');
+    if (wP1) wP1.textContent = t('welcomeP1');
+    const wPath = $('#welcomePath');
+    if (wPath) wPath.innerHTML = t('welcomePathTip');
+    const pickBtn2 = $('#pickBtn2');
+    if (pickBtn2) pickBtn2.textContent = t('chooseDir');
+    const hints = document.querySelectorAll('#welcomeHints li');
+    if (hints[0]) hints[0].innerHTML = t('hint1');
+    if (hints[1]) hints[1].innerHTML = t('hint2');
+    if (hints[2]) hints[2].innerHTML = t('hint3');
+    if (hints[3]) hints[3].innerHTML = t('hint4');
+
+    updateFoldAllBtn();
+  }
+
+  function toggleLang() {
+    setLang(state.lang === 'zh' ? 'en' : 'zh');
+  }
+
+  function setLang(lang) {
+    state.lang = lang;
+    try { localStorage.setItem('agy-viewer-lang', lang); } catch (e) {}
+    document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
+    applyI18n();
+    if (state.projects.length) {
+      disambiguateProjectNames(state.projects);
+      renderSidebar();
+      updateStatusCounts();
+    }
+    if (state.currentId) {
+      openConversation(state.currentId);
+    }
+  }
+
   // ---------------------------------------------------------------- sql.js
   async function getSQL() {
     if (state.SQL) return state.SQL;
-    const bin = Uint8Array.from(atob(window.SQL_WASM_BASE64), c => c.charCodeAt(0));
-    state.SQL = await initSqlJs({ wasmBinary: bin });
+    state.SQL = await window.initSqlJs({
+      locateFile: () => 'data:application/wasm;base64,' + window.SQL_WASM_BASE64,
+    });
     return state.SQL;
   }
 
@@ -65,13 +334,13 @@
     return new SQL.Database(bytes);
   }
 
-  function queryAll(db, sql, params) {
-    const st = db.prepare(sql);
-    if (params) st.bind(params);
-    const rows = [];
-    while (st.step()) rows.push(st.getAsObject());
-    st.free();
-    return rows;
+  function queryAll(db, sql, params = []) {
+    const stmt = db.prepare(sql);
+    stmt.bind(params);
+    const out = [];
+    while (stmt.step()) out.push(stmt.getAsObject());
+    stmt.free();
+    return out;
   }
 
   // ---------------------------------------------------------------- sources
@@ -284,7 +553,7 @@
     }
     const stores = await resolveStores(handle);
     if (!stores.length) {
-      setStatus('该目录下没有找到 conversation_summaries.db，请选择 C:\\Users\\<用户>\\.gemini 或其下的 antigravity / antigravity-cli 目录', true);
+      setStatus(t('noConvDbInDir'), true);
       return;
     }
     await idbSet('root', handle);
@@ -293,19 +562,17 @@
   }
 
   async function reopenLast() {
-    const h = await idbGet('root');
-    if (!h) { setStatus('没有记录上次的目录', true); return; }
     try {
-      let p = await h.queryPermission({ mode: 'read' });
-      if (p !== 'granted') p = await h.requestPermission({ mode: 'read' });
-      if (p !== 'granted') { setStatus('未获得读取权限', true); return; }
+      const h = await idbGet('root');
+      if (!h) { setStatus(t('noRecordedLastDir'), true); return; }
+      const p = await h.requestPermission({ mode: 'read' });
+      if (p !== 'granted') { setStatus(t('noReadPermission'), true); return; }
       const stores = await resolveStores(h);
-      if (!stores.length) { setStatus('未在上次的目录中找到会话数据库', true); return; }
+      if (!stores.length) { setStatus(t('noDbInLastDir'), true); return; }
       await useSource(fsaSource(h, stores));
-    } catch (e) { setStatus('无法打开上次的目录：' + e.message, true); }
+    } catch (e) { setStatus(t('openLastDirFailed', e.message), true); }
   }
 
-  // ---------------------------------------------------------------- summaries
   function parseTime(s) {
     if (!s) return null;
     const m = String(s).match(/^(\d{4}-\d\d-\d\d)[ T](\d\d:\d\d:\d\d)(\.\d+)?(Z|[+-]\d\d:\d\d)?/);
@@ -332,16 +599,16 @@
 
   async function useSource(src) {
     state.source = src;
-    setStatus('正在读取数据库 …');
+    setStatus(t('readingDb'));
     let rows;
     try {
       rows = await src.readSummaries(openDb);
     } catch (e) {
-      setStatus('读取失败：' + e.message, true);
+      setStatus(t('readFailed', e.message), true);
       return;
     }
     if (!rows || !rows.length) {
-      setStatus('没有找到会话数据', true);
+      setStatus(t('noConvData'), true);
       return;
     }
 
@@ -349,8 +616,6 @@
     const convFileMap = await src.listConversationFiles();
 
     // Deduplicate rows by conversation_id across stores.
-    // If a conversation_id exists in multiple stores, prefer the store that actually has
-    // its conversation database on disk (.db or .pb), then the more recently modified one.
     const deduped = new Map();
     for (const r of rows) {
       const id = r.conversation_id;
@@ -406,9 +671,7 @@
     buildProjects();
     $('#welcome').hidden = true;
     $('#reloadBtn').hidden = false;
-    const activeProjects = state.projects.filter(p => p.convs.some(c => !c.parent && hasValidFile(c)));
-    const topCount = state.convs.filter(c => !c.parent && hasValidFile(c)).length;
-    setStatus(`${src.name}：${activeProjects.length} 个工程，${topCount} 个会话`);
+    updateStatusCounts();
     renderSidebar();
     const hashId = decodeURIComponent(location.hash.slice(1));
     if (hashId && state.byId.has(hashId)) openConversation(hashId);
@@ -444,14 +707,18 @@
     for (const p of projects) {
       const base = p.workspaces.length
         ? [...new Set(p.workspaces.map(w => w.replace(/\/+$/, '').split('/').pop()))].join(' + ')
-        : '(无工作区)';
+        : '';
       p.baseName = base;
       if (!byBase.has(base)) byBase.set(base, []);
       byBase.get(base).push(p);
     }
 
     for (const [base, list] of byBase.entries()) {
-      if (list.length === 1 || base === '(无工作区)') {
+      if (!base) {
+        for (const p of list) p.name = t('noWorkspace');
+        continue;
+      }
+      if (list.length === 1) {
         list[0].name = base;
         continue;
       }
@@ -508,7 +775,7 @@
   function saveCollapsed() { try { localStorage.setItem('agy-viewer-collapsed', JSON.stringify([...collapsed])); } catch (e) { /* ignore */ } }
 
   function convLabel(c) {
-    return c.title || c.preview.split('\n')[0].slice(0, 80) || (c.agent ? `[${c.agent}]` : '(无标题)');
+    return c.title || c.preview.split('\n')[0].slice(0, 80) || (c.agent ? `[${c.agent}]` : t('untitled'));
   }
 
   function matches(c, q) {
@@ -537,7 +804,7 @@
       const count = tops.length;
       const head = el('div', {
         class: 'proj-head',
-        title: (p.workspaces.length ? p.workspaces.join('\n') : '(无工作区)') + (p.id ? `\n工程 ID: ${p.id}` : ''),
+        title: (p.workspaces.length ? p.workspaces.join('\n') : t('noWorkspace')) + (p.id ? t('projIdTitle', p.id) : ''),
         onclick: () => { collapsed.has(p.key) ? collapsed.delete(p.key) : collapsed.add(p.key); saveCollapsed(); renderSidebar(); }
       },
         el('span', { class: 'chev' + (isCollapsed ? '' : ' open') }, '▸'),
@@ -548,7 +815,7 @@
       box.append(el('div', { class: 'project' }, head, ul));
       shown += items.length;
     }
-    if (!shown) box.append(el('div', { class: 'empty' }, q ? '没有匹配的会话' : '没有有效数据文件的会话'));
+    if (!shown) box.append(el('div', { class: 'empty' }, q ? t('noMatchingConvs') : t('noValidConvs')));
     updateControls();
   }
 
@@ -562,7 +829,8 @@
     const btn = $('#foldAllBtn');
     if (!btn) return;
     btn.hidden = !state.projects.length;
-    btn.textContent = allCollapsed() ? '全部展开' : '全部折叠';
+    btn.textContent = allCollapsed() ? t('expandAll') : t('collapseAll');
+    btn.title = t('foldAllBtnTitle');
   }
   function toggleAllProjects() {
     if (allCollapsed()) collapsed.clear();
@@ -575,10 +843,11 @@
   function convItem(c, q) {
     const isChildActive = k => k.id === state.currentId || k.children.some(isChildActive);
     const isActive = c.id === state.currentId || c.children.some(isChildActive);
+    const validKidsCount = c.children.filter(hasValidFile).length;
     return el('a', {
       class: 'conv' + (isActive ? ' active' : '') + (c.file === 'db' ? '' : ' nofile'),
       href: '#' + c.id,
-      title: `${convLabel(c)}\n${c.id}\n${c.sourceType ? `[${c.sourceType}] ` : ''}${fmtTime(c.modified)} · ${c.steps} 步${c.file === 'pb' ? '\n(.pb 加密格式，无法读取)' : ''}`,
+      title: `${convLabel(c)}\n${c.id}\n${c.sourceType ? `[${c.sourceType}] ` : ''}${fmtTime(c.modified)} · ${t('stepsCount', c.steps)}${c.file === 'pb' ? `\n${t('encryptedTooltip')}` : ''}`,
       onclick: e => { e.preventDefault(); openConversation(c.id); },
     },
       el('div', { class: 'conv-title' },
@@ -586,18 +855,12 @@
         c.agent ? el('span', { class: 'tag' }, c.agent) : null,
         convLabel(c)),
       el('div', { class: 'conv-meta' },
-        fmtTime(c.modified), ` · ${c.steps} 步`,
-        c.children.filter(hasValidFile).length ? ` · ${c.children.filter(hasValidFile).length} 子代理` : '',
-        c.file === 'pb' ? ' · 加密' : ''));
+        fmtTime(c.modified), ` · ${t('stepsCount', c.steps)}`,
+        validKidsCount ? t('subagentsCount', validKidsCount) : '',
+        c.file === 'pb' ? t('encryptedTag') : ''));
   }
 
   // ---------------------------------------------------------------- steps
-  const STEP_NAMES = {
-    5: '写入文件', 7: '搜索', 8: '查看文件', 9: '列目录', 14: '用户', 15: '助手', 17: '错误',
-    21: '运行命令', 23: '检查点', 90: '系统提示', 91: '生成图片', 98: '会话开始', 101: '系统消息',
-    127: '调用子代理', 132: '工具', 138: '提问',
-  };
-
   function parseStep(row) {
     const m = new Msg(row.step_payload instanceof Uint8Array ? row.step_payload : new Uint8Array(0));
     const type = m.num(1) ?? row.step_type;
@@ -628,24 +891,24 @@
     main.textContent = '';
     main.append(convHeader(c));
     if (c.file === 'pb') {
-      main.append(el('div', { class: 'notice' }, '这个会话是旧版 .pb 格式（内容已加密），无法在浏览器里解码。'));
+      main.append(el('div', { class: 'notice' }, t('encryptedNoticePb')));
       return;
     }
     if (!c.file) {
-      main.append(el('div', { class: 'notice' }, `conversations 目录里找不到 ${id}.db`));
+      main.append(el('div', { class: 'notice' }, t('fileNotFoundNotice', id)));
       return;
     }
-    const loading = el('div', { class: 'notice' }, '加载中…');
+    const loading = el('div', { class: 'notice' }, t('loading'));
     main.append(loading);
     let steps;
     try {
       const db = await openDb(`conversations/${id}.db`, c.storeName);
-      if (!db) throw new Error(`未找到文件 conversations/${id}.db`);
+      if (!db) throw new Error(t('fileNotFound', id));
       const rows = queryAll(db, 'SELECT idx, step_type, status, step_payload FROM steps ORDER BY idx');
       db.close();
       steps = rows.map(parseStep);
     } catch (e) {
-      loading.textContent = '读取失败：' + e.message;
+      loading.textContent = t('readFailed', e.message);
       return;
     }
     if (state.currentId !== id) return;
@@ -660,22 +923,22 @@
     return el('header', { class: 'conv-header' },
       el('h1', null, convLabel(c)),
       el('div', { class: 'meta-grid' },
-        el('span', null, 'UUID'), el('code', { class: 'copy', title: '点击复制', onclick: e => copyText(c.id, e.target) }, c.id),
-        el('span', null, '文件'), el('code', null, c.file ? `${c.storeName ? c.storeName + '/' : ''}conversations/${c.id}.${c.file}` : '—'),
-        el('span', null, '工作区'), el('span', null, c.workspaces.join('，') || '—'),
-        el('span', null, '更新时间'), el('span', null, `${fmtTime(c.modified)}  ·  ${c.steps} 步  ·  ${c.status || '—'}`),
-        c.sourceType ? el('span', null, '来源') : null,
+        el('span', null, t('uuid')), el('code', { class: 'copy', title: t('clickToCopy'), onclick: e => copyText(c.id, e.target) }, c.id),
+        el('span', null, t('file')), el('code', null, c.file ? `${c.storeName ? c.storeName + '/' : ''}conversations/${c.id}.${c.file}` : '—'),
+        el('span', null, t('workspace')), el('span', null, c.workspaces.join(', ') || '—'),
+        el('span', null, t('updated')), el('span', null, `${fmtTime(c.modified)}  ·  ${t('stepsCount', c.steps)}  ·  ${c.status || '—'}`),
+        c.sourceType ? el('span', null, t('source')) : null,
         c.sourceType ? el('span', null, c.sourceType === 'CLI' ? 'AGY CLI' : 'Antigravity IDE') : null,
-        c.agent ? el('span', null, '代理') : null, c.agent ? el('span', null, c.agent) : null,
-        parent ? el('span', null, '父会话') : null,
+        c.agent ? el('span', null, t('agent')) : null, c.agent ? el('span', null, c.agent) : null,
+        parent ? el('span', null, t('parentConv')) : null,
         parent ? el('a', { href: '#' + parent.id, onclick: e => { e.preventDefault(); openConversation(parent.id); } }, convLabel(parent)) : null,
-        c.children.length ? el('span', null, '子代理') : null,
+        c.children.length ? el('span', null, t('subagents')) : null,
         c.children.length ? el('span', { class: 'links' }, c.children.map(k =>
           el('a', { href: '#' + k.id, onclick: e => { e.preventDefault(); openConversation(k.id); } }, convLabel(k)))) : null),
-      c.preview && c.preview !== c.title ? el('details', { class: 'preview' }, el('summary', null, '摘要'), el('div', { class: 'pre' }, c.preview)) : null,
+      c.preview && c.preview !== c.title ? el('details', { class: 'preview' }, el('summary', null, t('summary')), el('div', { class: 'pre' }, c.preview)) : null,
       el('div', { class: 'toolbar' },
-        toggle('thinking', '思考过程'), toggle('tools', '工具调用'), toggle('system', '系统步骤'), toggle('expand', '展开工具输出'),
-        el('button', { class: 'btn small', onclick: exportMarkdown }, '导出 Markdown')));
+        toggle('thinking', t('thinking')), toggle('tools', t('tools')), toggle('system', t('systemSteps')), toggle('expand', t('expandOutput')),
+        el('button', { class: 'btn small', onclick: exportMarkdown }, t('exportMd'))));
   }
 
   function toggle(key, label) {
@@ -690,10 +953,18 @@
       } }), label);
   }
 
-  function copyText(t, node) {
-    navigator.clipboard && navigator.clipboard.writeText(t).then(() => {
-      node.classList.add('copied'); setTimeout(() => node.classList.remove('copied'), 900);
-    }, () => {});
+  function copyText(txt, node) {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(txt).then(() => {
+        node.classList.add('copied');
+        const origTitle = node.title;
+        node.title = t('copied');
+        setTimeout(() => {
+          node.classList.remove('copied');
+          node.title = origTitle;
+        }, 1200);
+      }, () => {});
+    }
   }
 
   // ---------------------------------------------------------------- markdown
@@ -719,15 +990,15 @@
     for (const s of steps) {
       let node = null;
       try { node = renderStep(s, shownToolIds); }
-      catch (e) { node = card(s, 'err', `步骤 ${s.idx} 解析出错`, el('div', { class: 'pre' }, String(e && e.stack || e))); }
+      catch (e) { node = card(s, 'err', t('stepParseError', s.idx), el('div', { class: 'pre' }, String(e && e.stack || e))); }
       if (node) tl.append(node);
     }
-    if (!tl.children.length) tl.append(el('div', { class: 'notice' }, '没有可显示的步骤'));
+    if (!tl.children.length) tl.append(el('div', { class: 'notice' }, t('noSteps')));
     main.append(tl);
   }
 
   function rawToggle(s) {
-    const d = el('details', { class: 'raw' }, el('summary', null, '原始数据'));
+    const d = el('details', { class: 'raw' }, el('summary', null, t('rawProto')));
     d.addEventListener('toggle', () => {
       if (d.open && d.children.length === 1) d.append(el('pre', null, treeText(toTree(s.raw) || [], 0)));
     }, { once: false });
@@ -784,7 +1055,7 @@
     switch (s.type) {
       case 14: { // user input
         const text = b ? b.str(2) || b.str(3, 1) : '';
-        return card(s, 'user', '用户', md(text));
+        return card(s, 'user', t('user'), md(text));
       }
       case 15: { // planner response
         const thinking = b ? b.str(3) : '';
@@ -792,32 +1063,32 @@
         const calls = b ? b.msgs(7) : [];
         const missing = calls.filter(c => !shownToolIds.has(c.str(1)));
         if (!text && !(state.opts.thinking && thinking) && !(state.opts.tools && missing.length)) return null;
-        return card(s, 'assistant', '助手',
-          state.opts.thinking && thinking ? collapsible('思考过程', md(thinking), false) : null,
+        return card(s, 'assistant', t('assistant'),
+          state.opts.thinking && thinking ? collapsible(t('thinking'), md(thinking), false) : null,
           text ? md(text) : null,
           state.opts.tools && missing.length ? el('div', { class: 'calls' }, missing.map(c =>
-            collapsible(el('span', null, '调用 ', el('code', null, c.str(2))), prettyArgs(c.str(3)), state.opts.expand))) : null);
+            collapsible(el('span', null, t('callTool'), el('code', null, c.str(2))), prettyArgs(c.str(3)), state.opts.expand))) : null);
       }
       case 17: { // error
         if (!b) return null;
         const e = b.msg(3) || b;
-        return card(s, 'err', '错误', pre(e.str(1) || e.str(2)), e.str(3) ? collapsible('详情', pre(e.str(3))) : null);
+        return card(s, 'err', t('error'), pre(e.str(1) || e.str(2)), e.str(3) ? collapsible(t('details'), pre(e.str(3))) : null);
       }
       case 101: { // system message
         if (!state.opts.system) return null;
-        return card(s, 'system', '系统消息', md(b ? b.str(2, 2) || b.str(1) : ''));
+        return card(s, 'system', t('systemMsg'), md(b ? b.str(2, 2) || b.str(1) : ''));
       }
       case 90: case 98: case 23: {
         if (!state.opts.system) return null;
         const text = b ? collectStrings(b.buf, [], 1).join('\n') : '';
-        return card(s, 'system', STEP_NAMES[s.type] || `类型 ${s.type}`, text ? collapsible('内容', pre(text)) : null);
+        return card(s, 'system', getStepName(s.type), text ? collapsible(t('content'), pre(text)) : null);
       }
       case 127: return renderSubagents(s);
       case 91: return renderImage(s);
       default:
         if (s.toolName || b) return renderTool(s);
         if (!state.opts.system) return null;
-        return card(s, 'system', STEP_NAMES[s.type] || `类型 ${s.type}`);
+        return card(s, 'system', getStepName(s.type));
     }
   }
 
@@ -851,12 +1122,12 @@
 
   function renderTool(s) {
     if (!state.opts.tools) return null;
-    const name = s.toolName || STEP_NAMES[s.type] || `类型 ${s.type}`;
+    const name = s.toolName || getStepName(s.type);
     const title = el('span', null, el('code', { class: 'tool-name' }, name), ' ', s.toolAction || s.toolSummary || '');
     const args = s.type === 21 ? null : prettyArgs(s.toolArgs);
     const out = toolOutput(s);
-    return card(s, 'tool', '工具',
-      collapsible(title, el('div', null, args, out || el('div', { class: 'muted' }, '(无输出)')), state.opts.expand));
+    return card(s, 'tool', t('tool'),
+      collapsible(title, el('div', null, args, out || el('div', { class: 'muted' }, t('noOutput'))), state.opts.expand));
   }
 
   function renderSubagents(s) {
@@ -864,16 +1135,16 @@
     const tasks = b ? b.msgs(9) : [];
     const runs = b ? b.msgs(10) : [];
     const list = el('div', { class: 'subagents' });
-    tasks.forEach((t, i) => {
+    tasks.forEach((tSub, i) => {
       const id = runs[i] && runs[i].str(1);
       const known = id && state.byId.get(id);
       list.append(el('div', { class: 'subagent' },
-        el('div', null, el('span', { class: 'tag' }, t.str(1)), ' ', el('b', null, t.str(2)),
+        el('div', null, el('span', { class: 'tag' }, tSub.str(1)), ' ', el('b', null, tSub.str(2)),
           id ? el('a', { href: '#' + id, class: 'open-sub', onclick: e => { e.preventDefault(); if (known) openConversation(id); } },
-            known ? '打开会话 →' : id) : null),
-        collapsible('任务描述', md(t.str(3)), false)));
+            known ? t('openConvLink') : id) : null),
+        collapsible(t('taskDesc'), md(tSub.str(3)), false)));
     });
-    return card(s, 'tool', '调用子代理', list);
+    return card(s, 'tool', t('invokeSubagent'), list);
   }
 
   function brainPath(uri) {
@@ -898,7 +1169,7 @@
       state.objectUrls.push(url);
       holder.prepend(el('img', { src: url, alt: prompt.slice(0, 100) }));
     });
-    return card(s, 'tool', '生成图片', collapsible('提示词', pre(prompt)), holder);
+    return card(s, 'tool', t('generateImage'), collapsible(t('prompt'), pre(prompt)), holder);
   }
 
   // ---------------------------------------------------------------- export
@@ -906,16 +1177,16 @@
     const cur = state.currentSteps;
     if (!cur) return;
     const c = state.byId.get(cur.id);
-    const lines = [`# ${convLabel(c)}`, '', `- UUID: ${c.id}`, `- 工作区: ${c.workspaces.join(', ')}`, `- 更新时间: ${fmtTime(c.modified)}`, ''];
+    const lines = [`# ${convLabel(c)}`, '', `- UUID: ${c.id}`, `- ${t('exportWorkspace')}: ${c.workspaces.join(', ')}`, `- ${t('exportUpdated')}: ${fmtTime(c.modified)}`, ''];
     for (const s of cur.steps) {
       const b = s.body;
-      if (s.type === 14 && b) lines.push('## 用户', '', b.str(2), '');
+      if (s.type === 14 && b) lines.push(`## ${t('user')}`, '', b.str(2), '');
       else if (s.type === 15 && b) {
-        const t = b.str(8) || b.str(1);
-        if (state.opts.thinking && b.str(3)) lines.push('<details><summary>思考过程</summary>', '', b.str(3), '', '</details>', '');
-        if (t) lines.push('## 助手', '', t, '');
+        const text = b.str(8) || b.str(1);
+        if (state.opts.thinking && b.str(3)) lines.push(`<details><summary>${t('exportThinking')}</summary>`, '', b.str(3), '', '</details>', '');
+        if (text) lines.push(`## ${t('assistant')}`, '', text, '');
       } else if (state.opts.tools && s.toolName) {
-        lines.push(`> 工具 \`${s.toolName}\` ${s.toolAction || s.toolSummary || ''}`, '');
+        lines.push(`> ${t('exportTool')} \`${s.toolName}\` ${s.toolAction || s.toolSummary || ''}`, '');
       }
     }
     const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' });
@@ -977,12 +1248,14 @@
 
   // ---------------------------------------------------------------- init
   initResizer();
+  applyI18n();
+  $('#langBtn').addEventListener('click', toggleLang);
   $('#pickBtn').addEventListener('click', pickDirectory);
   $('#pickBtn2').addEventListener('click', pickDirectory);
   $('#reloadBtn').addEventListener('click', () => state.source && useSource(state.source));
   $('#dirInput').addEventListener('change', e => {
     const src = fileListSource(e.target.files);
-    if (!src) { setStatus('所选目录中没有 conversation_summaries.db', true); return; }
+    if (!src) { setStatus(t('noSummariesInFiles'), true); return; }
     useSource(src);
   });
   $('#foldAllBtn').addEventListener('click', toggleAllProjects);
@@ -995,6 +1268,6 @@
   (async () => {
     if (window.showDirectoryPicker && await idbGet('root')) $('#reopenBtn').hidden = false;
     $('#reopenBtn').addEventListener('click', reopenLast);
-    getSQL().catch(e => setStatus('sql.js 初始化失败：' + e.message, true));
+    getSQL().catch(e => setStatus(t('sqlInitFailed', e.message), true));
   })();
 })();

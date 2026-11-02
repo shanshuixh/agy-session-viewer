@@ -7,10 +7,12 @@ A pure front-end (HTML5) viewer for Antigravity's local conversation history. No
 ## Usage
 
 1. Open `index.html` directly in Chrome / Edge (`file://` works).
-2. Click "选择目录" (Choose folder) and select `C:\Users\<username>\.gemini` (loads both IDE and AGY CLI sessions; or choose `antigravity` / `antigravity-cli` directly).
-3. The sidebar lists conversations cleanly grouped by project workspace directory (whether created via Antigravity IDE or AGY CLI, each project is an isolated directory instead of merging all CLI history into one default group), with `[CLI]` or `[IDE]` tags. Click a conversation to view the full transcript and navigate linked subagents. The "全部折叠 / 全部展开" (Collapse all / Expand all) button next to the search box folds or unfolds every project at once.
+2. Click "Choose Folder" and select `C:\Users\<username>\.gemini` (loads both IDE and AGY CLI sessions; or choose `antigravity` / `antigravity-cli` directly).
+3. The sidebar lists conversations cleanly grouped by project workspace directory (whether created via Antigravity IDE or AGY CLI, each project is an isolated directory instead of merging all CLI history into one default group), with `[CLI]` or `[IDE]` tags. Click a conversation to view the full transcript and navigate linked subagents. The "Collapse All / Expand All" button next to the search box folds or unfolds every project at once.
 
-Chrome / Edge remember the folder, so next time just click "打开上次目录" (Open last folder). Other browsers fall back to a folder-upload picker.
+Chrome / Edge remember the folder, so next time just click "Open Last Folder". Other browsers fall back to a folder-upload picker.
+
+> The viewer automatically adapts to your system/browser language (English or Chinese), and you can also manually switch languages via the button in the sidebar.
 
 ## Data layout
 
@@ -29,7 +31,7 @@ Fields identified in `step_payload` (by field number):
 - Type 21, run command: `28.23` command, `28.2` working directory, `28.21.1` output
 - Type 132, generic tool result: `140.2.1` output
 - Type 127, invoke subagent: `143.9` tasks, `143.10.1` subagent conversation UUIDs
-- Other types are shown generically; every step has a "原始数据" (raw data) toggle showing the full decoded tree
+- Other types are shown generically; every step has a "Raw Data" toggle showing the full decoded tree
 
 ## Files
 

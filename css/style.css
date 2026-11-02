@@ -77,7 +77,8 @@ a { color: var(--accent); }
   background: var(--accent);
 }
 .side-top { padding: 14px 14px 8px; border-bottom: 1px solid var(--border); }
-.brand { font-weight: 650; font-size: 15px; margin-bottom: 10px; }
+.brand-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.brand { font-weight: 650; font-size: 15px; }
 .side-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
 .search-row { display: flex; gap: 6px; }
 .search-row .btn { flex-shrink: 0; white-space: nowrap; }

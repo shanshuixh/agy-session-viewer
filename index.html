@@ -18,7 +18,6 @@
       </div>
       <div class="search-row">
         <input id="search" type="search" placeholder="搜索标题 / 摘要 / UUID">
-        <button id="validOnlyBtn" class="btn ghost" hidden title="仅显示有完整数据记录的会话">仅看有效</button>
         <button id="foldAllBtn" class="btn ghost" hidden title="折叠 / 展开所有工程">全部折叠</button>
       </div>
       <div id="status" class="status"></div>
@@ -33,7 +32,7 @@
       <p><code>C:\Users\&lt;你的用户名&gt;\.gemini</code>（选 <code>.gemini</code> 可自动聚合 IDE 与 CLI；也可单选其下的 <code>antigravity</code> 或 <code>antigravity-cli</code>）</p>
       <button id="pickBtn2" class="btn big">选择目录</button>
       <ul class="hints">
-        <li>按工程工作区目录独立归类（不论是 Antigravity IDE 还是 AGY CLI，每个工程独立成一个目录），子代理会话挂在父会话下。</li>
+        <li>按工程工作区目录独立归类（不论是 Antigravity IDE 还是 AGY CLI，每个工程独立成一个目录）；点击会话后可查看完整记录及关联子代理。</li>
         <li>点击会话后，按 UUID 读取 <code>conversations/&lt;UUID&gt;.db</code> 中的 <code>steps</code> 表并解码。</li>
         <li>会自动合并 <code>.db-wal</code> 中尚未写回的数据；旧版 <code>.pb</code> 文件是加密的，无法读取。</li>
         <li>推荐使用 Chrome / Edge，可记住目录；其他浏览器会退回到文件夹上传方式。</li>

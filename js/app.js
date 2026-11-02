@@ -32,7 +32,7 @@
   };
 
   function loadOpts() {
-    const def = { thinking: true, tools: true, system: false, expand: false, validOnly: false };
+    const def = { thinking: true, tools: true, system: false, expand: false };
     try { return Object.assign(def, JSON.parse(localStorage.getItem('agy-viewer-opts') || '{}')); }
     catch (e) { return def; }
   }
@@ -78,6 +78,7 @@
   function fsaSource(rootHandle, stores) {
     const storeMap = new Map(stores.map(s => [s.name, s]));
     return {
+      rootHandle,
       name: stores.length > 1 ? `${rootHandle.name} (${stores.map(s => s.name).join(' + ')})` : stores[0].name,
       stores,
       async getFile(rel, storeHint) {
@@ -261,15 +262,33 @@
 
   async function pickDirectory() {
     if (!window.showDirectoryPicker) { $('#dirInput').click(); return; }
+    const pickerOpts = { id: 'agy-root', mode: 'read' };
+    const startHandle = state.source?.rootHandle || await idbGet('root');
+    if (startHandle) pickerOpts.startIn = startHandle;
     let handle;
-    try { handle = await window.showDirectoryPicker({ id: 'agy-root', mode: 'read' }); }
-    catch (e) { if (e.name !== 'AbortError') $('#dirInput').click(); return; }
+    try {
+      handle = await window.showDirectoryPicker(pickerOpts);
+    } catch (e) {
+      if (e.name === 'AbortError') return;
+      if (pickerOpts.startIn) {
+        try {
+          handle = await window.showDirectoryPicker({ id: 'agy-root', mode: 'read' });
+        } catch (e2) {
+          if (e2.name !== 'AbortError') $('#dirInput').click();
+          return;
+        }
+      } else {
+        $('#dirInput').click();
+        return;
+      }
+    }
     const stores = await resolveStores(handle);
     if (!stores.length) {
       setStatus('该目录下没有找到 conversation_summaries.db，请选择 C:\\Users\\<用户>\\.gemini 或其下的 antigravity / antigravity-cli 目录', true);
       return;
     }
     await idbSet('root', handle);
+    $('#reopenBtn').hidden = false;
     await useSource(fsaSource(handle, stores));
   }
 
@@ -387,7 +406,9 @@
     buildProjects();
     $('#welcome').hidden = true;
     $('#reloadBtn').hidden = false;
-    setStatus(`${src.name}：${state.projects.length} 个工程，${state.convs.length} 个会话`);
+    const activeProjects = state.projects.filter(p => p.convs.some(c => !c.parent && hasValidFile(c)));
+    const topCount = state.convs.filter(c => !c.parent && hasValidFile(c)).length;
+    setStatus(`${src.name}：${activeProjects.length} 个工程，${topCount} 个会话`);
     renderSidebar();
     const hashId = decodeURIComponent(location.hash.slice(1));
     if (hashId && state.byId.has(hashId)) openConversation(hashId);
@@ -495,24 +516,25 @@
     return (c.title + '\n' + c.preview + '\n' + c.id + '\n' + (c.agent || '') + '\n' + (c.sourceType || '') + '\n' + c.workspaces.join('\n')).toLowerCase().includes(q);
   }
 
+  function hasValidFile(c) {
+    return !!c.file || c.children.some(hasValidFile);
+  }
+
   function renderSidebar() {
     const box = $('#projects');
     box.textContent = '';
     const q = state.filter.trim().toLowerCase();
     let shown = 0;
     for (const p of state.projects) {
-      // Top-level conversations of this project (parent is not in this project, or has no parent)
-      const tops = p.convs.filter(c => !c.parent || !p.convs.some(k => k.id === c.parent));
-      const visible = c => {
-        if (state.opts.validOnly && !c.file && !c.children.some(visible)) return false;
-        return matches(c, q) || c.children.some(visible);
-      };
-      const list = tops.filter(visible);
+      // Top-level valid conversations of this project (no subagents)
+      const tops = p.convs.filter(c => !c.parent && hasValidFile(c));
+      const matchesWithKids = c => matches(c, q) || c.children.some(matchesWithKids);
+      const list = tops.filter(matchesWithKids);
       const projMatch = q && (p.name.toLowerCase().includes(q) || p.workspaces.some(w => w.toLowerCase().includes(q)));
-      if (!list.length && (!projMatch || (state.opts.validOnly && !p.convs.some(c => c.file)))) continue;
+      if (!list.length && (!projMatch || !tops.length)) continue;
       const items = list.length ? list : tops;
       const isCollapsed = collapsed.has(p.key) && !q;
-      const count = state.opts.validOnly ? p.convs.filter(c => c.file).length : p.convs.length;
+      const count = tops.length;
       const head = el('div', {
         class: 'proj-head',
         title: (p.workspaces.length ? p.workspaces.join('\n') : '(无工作区)') + (p.id ? `\n工程 ID: ${p.id}` : ''),
@@ -522,11 +544,11 @@
         el('span', { class: 'proj-name' }, p.name),
         el('span', { class: 'count' }, String(count)));
       const ul = el('div', { class: 'conv-list' });
-      if (!isCollapsed) for (const c of items) ul.append(convItem(c, q, 0));
+      if (!isCollapsed) for (const c of items) ul.append(convItem(c, q));
       box.append(el('div', { class: 'project' }, head, ul));
       shown += items.length;
     }
-    if (!shown) box.append(el('div', { class: 'empty' }, q ? '没有匹配的会话' : (state.opts.validOnly ? '没有有效数据文件的会话' : '没有会话')));
+    if (!shown) box.append(el('div', { class: 'empty' }, q ? '没有匹配的会话' : '没有有效数据文件的会话'));
     updateControls();
   }
 
@@ -535,26 +557,12 @@
   }
   function updateControls() {
     updateFoldAllBtn();
-    updateValidOnlyBtn();
   }
   function updateFoldAllBtn() {
     const btn = $('#foldAllBtn');
     if (!btn) return;
     btn.hidden = !state.projects.length;
     btn.textContent = allCollapsed() ? '全部展开' : '全部折叠';
-  }
-  function updateValidOnlyBtn() {
-    const btn = $('#validOnlyBtn');
-    if (!btn) return;
-    btn.hidden = !state.projects.length;
-    btn.classList.toggle('active', !!state.opts.validOnly);
-    btn.textContent = state.opts.validOnly ? '显示全部' : '仅看有效';
-  }
-  function toggleValidOnly() {
-    state.opts.validOnly = !state.opts.validOnly;
-    saveOpts();
-    updateValidOnlyBtn();
-    renderSidebar();
   }
   function toggleAllProjects() {
     if (allCollapsed()) collapsed.clear();
@@ -564,11 +572,12 @@
     $('#projects').scrollTop = 0;
   }
 
-  function convItem(c, q, level) {
-    const wrap = el('div');
-    const item = el('a', {
-      class: 'conv' + (c.id === state.currentId ? ' active' : '') + (c.file === 'db' ? '' : ' nofile'),
-      href: '#' + c.id, style: `padding-left:${12 + level * 16}px`,
+  function convItem(c, q) {
+    const isChildActive = k => k.id === state.currentId || k.children.some(isChildActive);
+    const isActive = c.id === state.currentId || c.children.some(isChildActive);
+    return el('a', {
+      class: 'conv' + (isActive ? ' active' : '') + (c.file === 'db' ? '' : ' nofile'),
+      href: '#' + c.id,
       title: `${convLabel(c)}\n${c.id}\n${c.sourceType ? `[${c.sourceType}] ` : ''}${fmtTime(c.modified)} · ${c.steps} 步${c.file === 'pb' ? '\n(.pb 加密格式，无法读取)' : ''}`,
       onclick: e => { e.preventDefault(); openConversation(c.id); },
     },
@@ -578,12 +587,8 @@
         convLabel(c)),
       el('div', { class: 'conv-meta' },
         fmtTime(c.modified), ` · ${c.steps} 步`,
-        c.children.length ? ` · ${c.children.length} 子代理` : '',
-        c.file === 'pb' ? ' · 加密' : c.file ? '' : ' · 缺文件'));
-    wrap.append(item);
-    const kids = c.children.filter(k => matches(k, q) || k.children.length).sort((a, b) => (a.modified || 0) - (b.modified || 0));
-    for (const k of kids) wrap.append(convItem(k, q, level + 1));
-    return wrap;
+        c.children.filter(hasValidFile).length ? ` · ${c.children.filter(hasValidFile).length} 子代理` : '',
+        c.file === 'pb' ? ' · 加密' : ''));
   }
 
   // ---------------------------------------------------------------- steps
@@ -980,7 +985,6 @@
     if (!src) { setStatus('所选目录中没有 conversation_summaries.db', true); return; }
     useSource(src);
   });
-  $('#validOnlyBtn').addEventListener('click', toggleValidOnly);
   $('#foldAllBtn').addEventListener('click', toggleAllProjects);
   $('#search').addEventListener('input', e => { state.filter = e.target.value; renderSidebar(); });
   window.addEventListener('hashchange', () => {

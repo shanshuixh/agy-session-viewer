@@ -8,7 +8,7 @@ A pure front-end (HTML5) viewer for Antigravity's local conversation history. No
 
 1. Open `index.html` directly in Chrome / Edge (`file://` works).
 2. Click "选择目录" (Choose folder) and select `C:\Users\<username>\.gemini` (loads both IDE and AGY CLI sessions; or choose `antigravity` / `antigravity-cli` directly).
-3. The sidebar lists conversations cleanly grouped by project workspace directory (whether created via Antigravity IDE or AGY CLI, each project is an isolated directory instead of merging all CLI history into one default group), with `[CLI]` or `[IDE]` tags. Subagent conversations are nested under their parent. Click a conversation to view the full transcript. The "全部折叠 / 全部展开" (Collapse all / Expand all) button next to the search box folds or unfolds every project at once.
+3. The sidebar lists conversations cleanly grouped by project workspace directory (whether created via Antigravity IDE or AGY CLI, each project is an isolated directory instead of merging all CLI history into one default group), with `[CLI]` or `[IDE]` tags. Click a conversation to view the full transcript and navigate linked subagents. The "全部折叠 / 全部展开" (Collapse all / Expand all) button next to the search box folds or unfolds every project at once.
 
 Chrome / Edge remember the folder, so next time just click "打开上次目录" (Open last folder). Other browsers fall back to a folder-upload picker.
 
